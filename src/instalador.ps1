@@ -2,8 +2,15 @@
 
 $ErrorActionPreference = 'Continue'
 
-# Icones embutidos (gerados em icones.ps1; o gerar-exe.ps1 incorpora esse arquivo ao .exe)
-if ($PSScriptRoot -and (Test-Path "$PSScriptRoot\icones.ps1")) { . "$PSScriptRoot\icones.ps1" }
+# Icones e pacote do Gerenciador SSH: no .exe o build.ps1 embute $script:IconesB64 e $script:PacoteSshB64.
+# Rodando o .ps1 direto, os icones sao lidos de assets\icones.
+if (-not $script:IconesB64 -and $PSScriptRoot) {
+    $dirIcones = Join-Path $PSScriptRoot '..\assets\icones'
+    if (Test-Path $dirIcones) {
+        $script:IconesB64 = @{}
+        Get-ChildItem $dirIcones -Filter *.png | ForEach-Object { $script:IconesB64[$_.BaseName] = [Convert]::ToBase64String([IO.File]::ReadAllBytes($_.FullName)) }
+    }
+}
 
 # ---------- Auto-elevacao ----------
 $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
@@ -45,7 +52,8 @@ $catalogo = @(
     @{ Grupo = 'Editores e IA'; Nome = 'Graft'; Desc = 'Contexto de codigo para agentes (npm)'; Icone = 'graft'; Deps = @('node'); Tipo = 'npm'; Pacote = '@nanonets/graft' },
     @{ Grupo = 'Comunicacao e produtividade'; Nome = 'Slack'; Desc = 'Mensagens da equipe'; Icone = 'slack'; Tipo = 'winget'; Id = 'SlackTechnologies.Slack' },
     @{ Grupo = 'Comunicacao e produtividade'; Nome = 'Obsidian'; Desc = 'Notas em Markdown'; Icone = 'obsidian'; Tipo = 'winget'; Id = 'Obsidian.Obsidian' },
-    @{ Grupo = 'Rede'; Nome = 'Pritunl Client'; Desc = 'Cliente VPN'; Icone = 'pritunl'; Tipo = 'winget'; Id = 'Pritunl.PritunlClient' },
+    @{ Grupo = 'Rede e acesso'; Nome = 'Gerenciador de Chaves SSH'; Desc = 'Varias contas Git, chaves ed25519'; Icone = 'ssh'; Deps = @('git'); Tipo = 'sshmanager' },
+    @{ Grupo = 'Rede e acesso'; Nome = 'Pritunl Client'; Desc = 'Cliente VPN'; Icone = 'pritunl'; Tipo = 'winget'; Id = 'Pritunl.PritunlClient' },
     @{ Grupo = 'Bancos de dados'; Nome = 'PostgreSQL'; Desc = 'Servidor (v18, fallback v17)'; Icone = 'postgres'; Tipo = 'postgres' },
     @{ Grupo = 'Bancos de dados'; Nome = 'MongoDB Server'; Desc = 'Servidor MongoDB'; Icone = 'mongo'; Tipo = 'winget'; Id = 'MongoDB.Server' },
     @{ Grupo = 'Gerenciadores de banco'; Nome = 'DBeaver Community'; Desc = 'Postgres, Mongo e outros'; Icone = 'dbeaver'; Tipo = 'winget'; Id = 'DBeaver.DBeaver.Community' },
@@ -630,6 +638,37 @@ exit `$LASTEXITCODE
                     }
                     $sucesso = ($cod -eq 0); $motivo = "codigo $cod"
                 }
+            }
+            'sshmanager' {
+                # Extrai o pacote embutido (script + fontes + icone) e cria o atalho no Menu Iniciar
+                $dest = Join-Path $env:LOCALAPPDATA 'Programs\GerenciadorSSH'
+                try {
+                    if (Test-Path $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
+                    [void](New-Item -ItemType Directory -Force $dest)
+                    if ($script:PacoteSshB64) {
+                        $zip = Join-Path $env:TEMP 'gerenciador-ssh.zip'
+                        [IO.File]::WriteAllBytes($zip, [Convert]::FromBase64String($script:PacoteSshB64))
+                        Add-Type -AssemblyName System.IO.Compression.FileSystem
+                        [IO.Compression.ZipFile]::ExtractToDirectory($zip, $dest)
+                        Remove-Item -LiteralPath $zip -Force
+                    } else {
+                        $origem = if ($PSScriptRoot) { Join-Path $PSScriptRoot '..\pacotes\gerenciador-ssh' }
+                        if (-not $origem -or -not (Test-Path $origem)) { throw 'pacote do Gerenciador SSH nao encontrado' }
+                        Copy-Item -Path (Join-Path $origem '*') -Destination $dest -Recurse -Force
+                    }
+                    $ps1 = Join-Path $dest 'gerenciador-ssh.ps1'
+                    if (-not (Test-Path $ps1)) { throw 'gerenciador-ssh.ps1 ausente no pacote' }
+                    $lnk = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path ([Environment]::GetFolderPath('Programs')) 'Gerenciador de Chaves SSH.lnk'))
+                    $lnk.TargetPath = "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
+                    $lnk.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -STA -File `"$ps1`""
+                    $lnk.WorkingDirectory = $dest
+                    $ico = Join-Path $dest 'gerenciador-ssh.ico'
+                    if (Test-Path $ico) { $lnk.IconLocation = $ico }
+                    $lnk.Description = 'Gerenciador de Chaves SSH'
+                    $lnk.Save()
+                    Write-Log "  Instalado em $dest (atalho no Menu Iniciar)"
+                    $sucesso = $true
+                } catch { $motivo = $_.Exception.Message }
             }
             'meta' {
                 Write-Log '  Pre-requisitos atendidos: Node, JDK 17 e Android SDK.'

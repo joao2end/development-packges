@@ -1,0 +1,5 @@
+# Saida e intermediarios do build
+build/
+dist/
+*.exe
+*.win32manifest
