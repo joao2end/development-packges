@@ -1,6 +1,21 @@
 # Ambiente de Desenvolvimento
 
+[![Release](https://img.shields.io/github/v/release/joao2end/development-packges)](https://github.com/joao2end/development-packges/releases/latest)
+[![Build](https://github.com/joao2end/development-packges/actions/workflows/release.yml/badge.svg)](https://github.com/joao2end/development-packges/actions/workflows/release.yml)
+
 Instalador grafico para Windows que prepara uma maquina de desenvolvimento do zero: voce marca o que quer, clica em **Instalar** e acompanha o progresso. O build gera **um unico executavel**, `dist\Instalar-Ambiente.exe`, que ja leva dentro todos os icones e o pacote do Gerenciador de Chaves SSH.
+
+## Download
+
+Baixe o `Instalar-Ambiente.exe` na [ultima release](https://github.com/joao2end/development-packges/releases/latest) e execute. Nao precisa instalar nada antes alem do winget (App Installer), que ja vem no Windows 10/11 atualizado.
+
+Cada release traz tambem o arquivo `Instalar-Ambiente.exe.sha256`. Para conferir a integridade do download:
+
+```powershell
+(Get-FileHash .\Instalar-Ambiente.exe -Algorithm SHA256).Hash.ToLower()
+```
+
+O resultado deve ser igual ao hash do arquivo `.sha256`.
 
 ## O que o instalador faz
 
@@ -72,6 +87,17 @@ powershell -ExecutionPolicy Bypass -STA -File .\src\instalador.ps1
 ```
 
 Para adicionar um programa, inclua uma linha no `$catalogo` de `src\instalador.ps1` (campos `Grupo`, `Nome`, `Desc`, `Icone`, `Tipo` e `Id`; opcionalmente `Chave` e `Deps`) e um PNG com o nome do `Icone` em `assets\icones`. Para programas instalaveis pelo winget, use `Tipo = 'winget'` e o ID do pacote (`winget search <nome>`).
+
+## Release
+
+As releases sao geradas pelo GitHub Actions (`.github/workflows/release.yml`) num runner Windows: ao enviar uma tag `v*`, o workflow roda `build.ps1`, calcula o SHA-256 e cria a release com `Instalar-Ambiente.exe` e `Instalar-Ambiente.exe.sha256`, com as notas geradas a partir dos commits.
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Use versionamento semantico (`vMAJOR.MINOR.PATCH`). Para testar o build na nuvem sem publicar, rode o workflow manualmente em **Actions > Release > Run workflow**: o `.exe` fica como artefato da execucao e nenhuma release e criada.
 
 ## Observacoes
 

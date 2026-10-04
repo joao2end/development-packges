@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Gerar Instalar-Ambiente.exe
+        shell: powershell
+        run: .\build.ps1
+
+      - name: Gerar checksum SHA-256
+        shell: powershell
+        run: |
+          $hash = (Get-FileHash dist\Instalar-Ambiente.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  Instalar-Ambiente.exe" | Out-File -Encoding ascii dist\Instalar-Ambiente.exe.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Instalar-Ambiente
+          path: dist/Instalar-Ambiente.exe*
+
+      - name: Publicar release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: powershell
+        run: |
+          gh release create "${{ github.ref_name }}" dist\Instalar-Ambiente.exe dist\Instalar-Ambiente.exe.sha256 `
+            --title "${{ github.ref_name }}" --generate-notes --verify-tag
